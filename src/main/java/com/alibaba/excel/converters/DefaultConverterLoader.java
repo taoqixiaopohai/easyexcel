@@ -37,6 +37,7 @@ import com.alibaba.excel.converters.string.StringBooleanConverter;
 import com.alibaba.excel.converters.string.StringErrorConverter;
 import com.alibaba.excel.converters.string.StringNumberConverter;
 import com.alibaba.excel.converters.string.StringStringConverter;
+import com.alibaba.excel.converters.url.UrlImageConverter;
 
 /**
  * Load default handler
@@ -47,55 +48,12 @@ public class DefaultConverterLoader {
     private static Map<String, Converter> defaultWriteConverter;
     private static Map<String, Converter> allConverter;
 
-    /**
-     * Load default write converter
-     *
-     * @return
-     */
-    public static Map<String, Converter> loadDefaultWriteConverter() {
-        if (defaultWriteConverter != null) {
-            return defaultWriteConverter;
-        }
-        defaultWriteConverter = new HashMap<String, Converter>(32);
-        putWriteConverter(new BigDecimalNumberConverter());
-        putWriteConverter(new BooleanBooleanConverter());
-        putWriteConverter(new ByteNumberConverter());
-        putWriteConverter(new DateStringConverter());
-        putWriteConverter(new DoubleNumberConverter());
-        putWriteConverter(new FloatNumberConverter());
-        putWriteConverter(new IntegerNumberConverter());
-        putWriteConverter(new LongNumberConverter());
-        putWriteConverter(new ShortNumberConverter());
-        putWriteConverter(new StringStringConverter());
-        putWriteConverter(new FileImageConverter());
-        putWriteConverter(new InputStreamImageConverter());
-        putWriteConverter(new ByteArrayImageConverter());
-        putWriteConverter(new BoxingByteArrayImageConverter());
-        return defaultWriteConverter;
+    static {
+        initDefaultWriteConverter();
+        initAllConverter();
     }
 
-    private static void putWriteConverter(Converter converter) {
-        defaultWriteConverter.put(ConverterKeyBuild.buildKey(converter.supportJavaTypeKey()), converter);
-    }
-
-    /**
-     * Load default read converter
-     *
-     * @return
-     */
-    public static Map<String, Converter> loadDefaultReadConverter() {
-        return loadAllConverter();
-    }
-
-    /**
-     * Load all converter
-     *
-     * @return
-     */
-    public static Map<String, Converter> loadAllConverter() {
-        if (allConverter != null) {
-            return allConverter;
-        }
+    private static void initAllConverter() {
         allConverter = new HashMap<String, Converter>(64);
         putAllConverter(new BigDecimalBooleanConverter());
         putAllConverter(new BigDecimalNumberConverter());
@@ -136,6 +94,55 @@ public class DefaultConverterLoader {
         putAllConverter(new StringNumberConverter());
         putAllConverter(new StringStringConverter());
         putAllConverter(new StringErrorConverter());
+    }
+
+    private static void initDefaultWriteConverter() {
+        defaultWriteConverter = new HashMap<String, Converter>(32);
+        putWriteConverter(new BigDecimalNumberConverter());
+        putWriteConverter(new BooleanBooleanConverter());
+        putWriteConverter(new ByteNumberConverter());
+        putWriteConverter(new DateStringConverter());
+        putWriteConverter(new DoubleNumberConverter());
+        putWriteConverter(new FloatNumberConverter());
+        putWriteConverter(new IntegerNumberConverter());
+        putWriteConverter(new LongNumberConverter());
+        putWriteConverter(new ShortNumberConverter());
+        putWriteConverter(new StringStringConverter());
+        putWriteConverter(new FileImageConverter());
+        putWriteConverter(new InputStreamImageConverter());
+        putWriteConverter(new ByteArrayImageConverter());
+        putWriteConverter(new BoxingByteArrayImageConverter());
+        putWriteConverter(new UrlImageConverter());
+    }
+
+    /**
+     * Load default write converter
+     *
+     * @return
+     */
+    public static Map<String, Converter> loadDefaultWriteConverter() {
+        return defaultWriteConverter;
+    }
+
+    private static void putWriteConverter(Converter converter) {
+        defaultWriteConverter.put(ConverterKeyBuild.buildKey(converter.supportJavaTypeKey()), converter);
+    }
+
+    /**
+     * Load default read converter
+     *
+     * @return
+     */
+    public static Map<String, Converter> loadDefaultReadConverter() {
+        return loadAllConverter();
+    }
+
+    /**
+     * Load all converter
+     *
+     * @return
+     */
+    public static Map<String, Converter> loadAllConverter() {
         return allConverter;
     }
 

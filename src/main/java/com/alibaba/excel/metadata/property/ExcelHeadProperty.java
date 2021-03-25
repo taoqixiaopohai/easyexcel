@@ -1,7 +1,6 @@
 package com.alibaba.excel.metadata.property;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -12,8 +11,6 @@ import java.util.TreeMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.alibaba.excel.annotation.ExcelIgnore;
-import com.alibaba.excel.annotation.ExcelIgnoreUnannotated;
 import com.alibaba.excel.annotation.ExcelProperty;
 import com.alibaba.excel.annotation.format.DateTimeFormat;
 import com.alibaba.excel.annotation.format.NumberFormat;
@@ -21,9 +18,10 @@ import com.alibaba.excel.converters.AutoConverter;
 import com.alibaba.excel.converters.Converter;
 import com.alibaba.excel.enums.HeadKindEnum;
 import com.alibaba.excel.exception.ExcelCommonException;
-import com.alibaba.excel.exception.ExcelGenerateException;
 import com.alibaba.excel.metadata.Head;
 import com.alibaba.excel.metadata.Holder;
+import com.alibaba.excel.util.ClassUtils;
+import com.alibaba.excel.util.CollectionUtils;
 import com.alibaba.excel.util.StringUtils;
 import com.alibaba.excel.write.metadata.holder.AbstractWriteHolder;
 
@@ -76,7 +74,7 @@ public class ExcelHeadProperty {
             int headIndex = 0;
             for (int i = 0; i < head.size(); i++) {
                 if (holder instanceof AbstractWriteHolder) {
-                    if (((AbstractWriteHolder)holder).ignore(null, i)) {
+                    if (((AbstractWriteHolder) holder).ignore(null, i)) {
                         continue;
                     }
                 }
@@ -85,10 +83,10 @@ public class ExcelHeadProperty {
                 headIndex++;
             }
             headKind = HeadKindEnum.STRING;
-        } else {
-            // convert headClazz to head
-            initColumnProperties(holder, convertAllFiled);
         }
+        // convert headClazz to head
+        initColumnProperties(holder, convertAllFiled);
+
         initHeadRowNumber();
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("The initialization sheet/table 'ExcelHeadProperty' is complete , head kind is {}", headKind);
@@ -119,67 +117,20 @@ public class ExcelHeadProperty {
         if (headClazz == null) {
             return;
         }
-        List<Field> fieldList = new ArrayList<Field>();
-        Class tempClass = headClazz;
-        // When the parent class is null, it indicates that the parent class (Object class) has reached the top
-        // level.
-        while (tempClass != null) {
-            Collections.addAll(fieldList, tempClass.getDeclaredFields());
-            // Get the parent class and give it to yourself
-            tempClass = tempClass.getSuperclass();
-        }
+        // Declared fields
+        Map<Integer, Field> sortedAllFiledMap = new TreeMap<Integer, Field>();
+        Map<Integer, Field> indexFiledMap = new TreeMap<Integer, Field>();
 
-        ExcelIgnoreUnannotated excelIgnoreUnannotated =
-            (ExcelIgnoreUnannotated)headClazz.getAnnotation(ExcelIgnoreUnannotated.class);
-        // Screening of field
-        List<Field> defaultFieldList = new ArrayList<Field>();
-        Map<Integer, Field> customFiledMap = new TreeMap<Integer, Field>();
-        for (Field field : fieldList) {
-            ExcelIgnore excelIgnore = field.getAnnotation(ExcelIgnore.class);
-            if (excelIgnore != null) {
-                ignoreMap.put(field.getName(), field);
-                continue;
-            }
-            ExcelProperty excelProperty = field.getAnnotation(ExcelProperty.class);
-            boolean noExcelProperty = excelProperty == null
-                && ((convertAllFiled != null && !convertAllFiled) || excelIgnoreUnannotated != null);
-            if (noExcelProperty) {
-                ignoreMap.put(field.getName(), field);
-                continue;
-            }
-            boolean isStaticFinalOrTransient =
-                (Modifier.isStatic(field.getModifiers()) && Modifier.isFinal(field.getModifiers()))
-                    || Modifier.isTransient(field.getModifiers());
-            if (excelProperty == null && isStaticFinalOrTransient) {
-                ignoreMap.put(field.getName(), field);
-                continue;
-            }
-            if (excelProperty == null || excelProperty.index() < 0) {
-                defaultFieldList.add(field);
-                continue;
-            }
-            if (customFiledMap.containsKey(excelProperty.index())) {
-                throw new ExcelGenerateException("The index of '" + customFiledMap.get(excelProperty.index()).getName()
-                    + "' and '" + field.getName() + "' must be inconsistent");
-            }
-            customFiledMap.put(excelProperty.index(), field);
-        }
+        boolean needIgnore = (holder instanceof AbstractWriteHolder) && (
+            !CollectionUtils.isEmpty(((AbstractWriteHolder) holder).getExcludeColumnFiledNames()) || !CollectionUtils
+                .isEmpty(((AbstractWriteHolder) holder).getExcludeColumnIndexes()) || !CollectionUtils
+                .isEmpty(((AbstractWriteHolder) holder).getIncludeColumnFiledNames()) || !CollectionUtils
+                .isEmpty(((AbstractWriteHolder) holder).getIncludeColumnIndexes()));
+        ClassUtils.declaredFields(headClazz, sortedAllFiledMap, indexFiledMap, ignoreMap, convertAllFiled, needIgnore,
+            holder);
 
-        int index = 0;
-        for (Field field : defaultFieldList) {
-            while (customFiledMap.containsKey(index)) {
-                Field customFiled = customFiledMap.get(index);
-                customFiledMap.remove(index);
-                if (!initOneColumnProperty(holder, index, customFiled, Boolean.TRUE)) {
-                    index++;
-                }
-            }
-            if (!initOneColumnProperty(holder, index, field, Boolean.FALSE)) {
-                index++;
-            }
-        }
-        for (Map.Entry<Integer, Field> entry : customFiledMap.entrySet()) {
-            initOneColumnProperty(holder, entry.getKey(), entry.getValue(), Boolean.TRUE);
+        for (Map.Entry<Integer, Field> entry : sortedAllFiledMap.entrySet()) {
+            initOneColumnProperty(entry.getKey(), entry.getValue(), indexFiledMap.containsKey(entry.getKey()));
         }
         headKind = HeadKindEnum.CLASS;
     }
@@ -187,26 +138,24 @@ public class ExcelHeadProperty {
     /**
      * Initialization column property
      *
-     * @param holder
      * @param index
      * @param field
      * @param forceIndex
      * @return Ignore current field
      */
-    private boolean initOneColumnProperty(Holder holder, int index, Field field, Boolean forceIndex) {
-        if (holder instanceof AbstractWriteHolder) {
-            if (((AbstractWriteHolder)holder).ignore(field.getName(), index)) {
-                return true;
-            }
-        }
+    private void initOneColumnProperty(int index, Field field, Boolean forceIndex) {
         ExcelProperty excelProperty = field.getAnnotation(ExcelProperty.class);
         List<String> tmpHeadList = new ArrayList<String>();
         boolean notForceName = excelProperty == null || excelProperty.value().length <= 0
             || (excelProperty.value().length == 1 && StringUtils.isEmpty((excelProperty.value())[0]));
-        if (notForceName) {
-            tmpHeadList.add(field.getName());
+        if (headMap.containsKey(index)) {
+            tmpHeadList.addAll(headMap.get(index).getHeadNameList());
         } else {
-            Collections.addAll(tmpHeadList, excelProperty.value());
+            if (notForceName) {
+                tmpHeadList.add(field.getName());
+            } else {
+                Collections.addAll(tmpHeadList, excelProperty.value());
+            }
         }
         Head head = new Head(index, field.getName(), tmpHeadList, forceIndex, !notForceName);
         ExcelContentProperty excelContentProperty = new ExcelContentProperty();
@@ -230,7 +179,6 @@ public class ExcelHeadProperty {
         headMap.put(index, head);
         contentPropertyMap.put(index, excelContentProperty);
         fieldNameContentPropertyMap.put(field.getName(), excelContentProperty);
-        return false;
     }
 
     public Class getHeadClazz() {

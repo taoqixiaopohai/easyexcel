@@ -27,7 +27,9 @@ import com.alibaba.excel.exception.ExcelGenerateException;
 import com.alibaba.excel.metadata.CellData;
 import com.alibaba.excel.metadata.Head;
 import com.alibaba.excel.support.ExcelTypeEnum;
+import com.alibaba.excel.util.DateUtils;
 import com.alibaba.excel.util.FileUtils;
+import com.alibaba.excel.util.NumberDataFormatterUtils;
 import com.alibaba.excel.util.StringUtils;
 import com.alibaba.excel.util.WorkBookUtil;
 import com.alibaba.excel.util.WriteHandlerUtils;
@@ -65,6 +67,10 @@ public class WriteContextImpl implements WriteContext {
      * Configuration of currently operated cell
      */
     private WriteHolder currentWriteHolder;
+    /**
+     * Prevent multiple shutdowns
+     */
+    private boolean finished = false;
 
     public WriteContextImpl(WriteWorkbook writeWorkbook) {
         if (writeWorkbook == null) {
@@ -102,34 +108,49 @@ public class WriteContextImpl implements WriteContext {
         if (writeSheet == null) {
             throw new IllegalArgumentException("Sheet argument cannot be null");
         }
-        if (writeSheet.getSheetNo() == null || writeSheet.getSheetNo() <= 0) {
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("Sheet number is null");
-            }
-            writeSheet.setSheetNo(0);
-        }
-        if (writeWorkbookHolder.getHasBeenInitializedSheet().containsKey(writeSheet.getSheetNo())) {
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("Sheet:{} is already existed", writeSheet.getSheetNo());
-            }
-            writeSheetHolder = writeWorkbookHolder.getHasBeenInitializedSheet().get(writeSheet.getSheetNo());
-            writeSheetHolder.setNewInitialization(Boolean.FALSE);
-            writeTableHolder = null;
-            currentWriteHolder = writeSheetHolder;
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("CurrentConfiguration is writeSheetHolder");
-            }
+        if (selectSheetFromCache(writeSheet)) {
             return;
         }
+
         initCurrentSheetHolder(writeSheet);
-        WriteHandlerUtils.beforeSheetCreate(this);
+
+        // Workbook handler need to supplementary execution
+        WriteHandlerUtils.beforeWorkbookCreate(this, true);
+        WriteHandlerUtils.afterWorkbookCreate(this, true);
+
         // Initialization current sheet
         initSheet(writeType);
     }
 
+    private boolean selectSheetFromCache(WriteSheet writeSheet) {
+        writeSheetHolder = null;
+        Integer sheetNo = writeSheet.getSheetNo();
+        if (sheetNo == null && StringUtils.isEmpty(writeSheet.getSheetName())) {
+            sheetNo = 0;
+        }
+        if (sheetNo != null) {
+            writeSheetHolder = writeWorkbookHolder.getHasBeenInitializedSheetIndexMap().get(sheetNo);
+        }
+        if (writeSheetHolder == null && !StringUtils.isEmpty(writeSheet.getSheetName())) {
+            writeSheetHolder = writeWorkbookHolder.getHasBeenInitializedSheetNameMap().get(writeSheet.getSheetName());
+        }
+        if (writeSheetHolder == null) {
+            return false;
+        }
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Sheet:{} is already existed", writeSheet.getSheetNo());
+        }
+        writeSheetHolder.setNewInitialization(Boolean.FALSE);
+        writeTableHolder = null;
+        currentWriteHolder = writeSheetHolder;
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("CurrentConfiguration is writeSheetHolder");
+        }
+        return true;
+    }
+
     private void initCurrentSheetHolder(WriteSheet writeSheet) {
         writeSheetHolder = new WriteSheetHolder(writeSheet, writeWorkbookHolder);
-        writeWorkbookHolder.getHasBeenInitializedSheet().put(writeSheet.getSheetNo(), writeSheetHolder);
         writeTableHolder = null;
         currentWriteHolder = writeSheetHolder;
         if (LOGGER.isDebugEnabled()) {
@@ -138,17 +159,30 @@ public class WriteContextImpl implements WriteContext {
     }
 
     private void initSheet(WriteTypeEnum writeType) {
+        WriteHandlerUtils.beforeSheetCreate(this);
         Sheet currentSheet;
         try {
-            currentSheet = writeWorkbookHolder.getWorkbook().getSheetAt(writeSheetHolder.getSheetNo());
-            writeSheetHolder
-                .setCachedSheet(writeWorkbookHolder.getCachedWorkbook().getSheetAt(writeSheetHolder.getSheetNo()));
-        } catch (Exception e) {
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("Can not find sheet:{} ,now create it", writeSheetHolder.getSheetNo());
+            if (writeSheetHolder.getSheetNo() != null) {
+                // When the add default sort order of appearance
+                if (WriteTypeEnum.ADD.equals(writeType) && writeWorkbookHolder.getTempTemplateInputStream() == null) {
+                    currentSheet = createSheet();
+                } else {
+                    currentSheet = writeWorkbookHolder.getWorkbook().getSheetAt(writeSheetHolder.getSheetNo());
+                    writeSheetHolder
+                        .setCachedSheet(
+                            writeWorkbookHolder.getCachedWorkbook().getSheetAt(writeSheetHolder.getSheetNo()));
+                }
+            } else {
+                // sheet name must not null
+                currentSheet = writeWorkbookHolder.getWorkbook().getSheet(writeSheetHolder.getSheetName());
+                writeSheetHolder
+                    .setCachedSheet(writeWorkbookHolder.getCachedWorkbook().getSheet(writeSheetHolder.getSheetName()));
             }
-            currentSheet = WorkBookUtil.createSheet(writeWorkbookHolder.getWorkbook(), writeSheetHolder.getSheetName());
-            writeSheetHolder.setCachedSheet(currentSheet);
+        } catch (Exception e) {
+            currentSheet = createSheet();
+        }
+        if (currentSheet == null) {
+            currentSheet = createSheet();
         }
         writeSheetHolder.setSheet(currentSheet);
         WriteHandlerUtils.afterSheetCreate(this);
@@ -156,6 +190,21 @@ public class WriteContextImpl implements WriteContext {
             // Initialization head
             initHead(writeSheetHolder.excelWriteHeadProperty());
         }
+        writeWorkbookHolder.getHasBeenInitializedSheetIndexMap().put(writeSheetHolder.getSheetNo(), writeSheetHolder);
+        writeWorkbookHolder.getHasBeenInitializedSheetNameMap().put(writeSheetHolder.getSheetName(), writeSheetHolder);
+    }
+
+    private Sheet createSheet() {
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Can not find sheet:{} ,now create it", writeSheetHolder.getSheetNo());
+        }
+        if (StringUtils.isEmpty(writeSheetHolder.getSheetName())) {
+            writeSheetHolder.setSheetName(writeSheetHolder.getSheetNo().toString());
+        }
+        Sheet currentSheet =
+            WorkBookUtil.createSheet(writeWorkbookHolder.getWorkbook(), writeSheetHolder.getSheetName());
+        writeSheetHolder.setCachedSheet(currentSheet);
+        return currentSheet;
     }
 
     public void initHead(ExcelWriteHeadProperty excelWriteHeadProperty) {
@@ -165,9 +214,11 @@ public class WriteContextImpl implements WriteContext {
         int newRowIndex = writeSheetHolder.getNewRowIndexAndStartDoWrite();
         newRowIndex += currentWriteHolder.relativeHeadRowIndex();
         // Combined head
-        addMergedRegionToCurrentSheet(excelWriteHeadProperty, newRowIndex);
-        for (int relativeRowIndex = 0, i = newRowIndex; i < excelWriteHeadProperty.getHeadRowNumber() + newRowIndex;
-            i++, relativeRowIndex++) {
+        if (currentWriteHolder.automaticMergeHead()) {
+            addMergedRegionToCurrentSheet(excelWriteHeadProperty, newRowIndex);
+        }
+        for (int relativeRowIndex = 0, i = newRowIndex; i < excelWriteHeadProperty.getHeadRowNumber()
+            + newRowIndex; i++, relativeRowIndex++) {
             WriteHandlerUtils.beforeRowCreate(this, newRowIndex, relativeRowIndex, Boolean.TRUE);
             Row row = WorkBookUtil.createRow(writeSheetHolder.getSheet(), i);
             WriteHandlerUtils.afterRowCreate(this, row, relativeRowIndex, Boolean.TRUE);
@@ -178,8 +229,9 @@ public class WriteContextImpl implements WriteContext {
 
     private void addMergedRegionToCurrentSheet(ExcelWriteHeadProperty excelWriteHeadProperty, int rowIndex) {
         for (com.alibaba.excel.metadata.CellRange cellRangeModel : excelWriteHeadProperty.headCellRangeList()) {
-            writeSheetHolder.getSheet().addMergedRegion(new CellRangeAddress(cellRangeModel.getFirstRow() + rowIndex,
-                cellRangeModel.getLastRow() + rowIndex, cellRangeModel.getFirstCol(), cellRangeModel.getLastCol()));
+            writeSheetHolder.getSheet()
+                .addMergedRegionUnsafe(new CellRangeAddress(cellRangeModel.getFirstRow() + rowIndex,
+                    cellRangeModel.getLastRow() + rowIndex, cellRangeModel.getFirstCol(), cellRangeModel.getLastCol()));
         }
     }
 
@@ -191,7 +243,7 @@ public class WriteContextImpl implements WriteContext {
             Cell cell = row.createCell(columnIndex);
             WriteHandlerUtils.afterCellCreate(this, cell, head, relativeRowIndex, Boolean.TRUE);
             cell.setCellValue(head.getHeadNameList().get(relativeRowIndex));
-            WriteHandlerUtils.afterCellDispose(this, (CellData)null, cell, head, relativeRowIndex, Boolean.TRUE);
+            WriteHandlerUtils.afterCellDispose(this, (CellData) null, cell, head, relativeRowIndex, Boolean.TRUE);
         }
     }
 
@@ -215,7 +267,15 @@ public class WriteContextImpl implements WriteContext {
             }
             return;
         }
+
         initCurrentTableHolder(writeTable);
+
+        // Workbook and sheet handler need to supplementary execution
+        WriteHandlerUtils.beforeWorkbookCreate(this, true);
+        WriteHandlerUtils.afterWorkbookCreate(this, true);
+        WriteHandlerUtils.beforeSheetCreate(this, true);
+        WriteHandlerUtils.afterSheetCreate(this, true);
+
         initHead(writeTableHolder.excelWriteHeadProperty());
     }
 
@@ -249,38 +309,48 @@ public class WriteContextImpl implements WriteContext {
     }
 
     @Override
-    public void finish() {
+    public void finish(boolean onException) {
+        if (finished) {
+            return;
+        }
+        finished = true;
         WriteHandlerUtils.afterWorkbookDispose(this);
         if (writeWorkbookHolder == null) {
             return;
         }
         Throwable throwable = null;
-
         boolean isOutputStreamEncrypt = false;
-        try {
-            isOutputStreamEncrypt = doOutputStreamEncrypt07();
-        } catch (Throwable t) {
-            throwable = t;
+        // Determine if you need to write excel
+        boolean writeExcel = !onException;
+        if (writeWorkbookHolder.getWriteExcelOnException()) {
+            writeExcel = Boolean.TRUE;
         }
-
+        // No data is written if an exception is thrown
+        if (writeExcel) {
+            try {
+                isOutputStreamEncrypt = doOutputStreamEncrypt07();
+            } catch (Throwable t) {
+                throwable = t;
+            }
+        }
         if (!isOutputStreamEncrypt) {
             try {
-                writeWorkbookHolder.getWorkbook().write(writeWorkbookHolder.getOutputStream());
+                if (writeExcel) {
+                    writeWorkbookHolder.getWorkbook().write(writeWorkbookHolder.getOutputStream());
+                }
                 writeWorkbookHolder.getWorkbook().close();
             } catch (Throwable t) {
                 throwable = t;
             }
         }
-
         try {
             Workbook workbook = writeWorkbookHolder.getWorkbook();
             if (workbook instanceof SXSSFWorkbook) {
-                ((SXSSFWorkbook)workbook).dispose();
+                ((SXSSFWorkbook) workbook).dispose();
             }
         } catch (Throwable t) {
             throwable = t;
         }
-
         try {
             if (writeWorkbookHolder.getAutoCloseStream() && writeWorkbookHolder.getOutputStream() != null) {
                 writeWorkbookHolder.getOutputStream().close();
@@ -288,15 +358,13 @@ public class WriteContextImpl implements WriteContext {
         } catch (Throwable t) {
             throwable = t;
         }
-
-        if (!isOutputStreamEncrypt) {
+        if (writeExcel && !isOutputStreamEncrypt) {
             try {
                 doFileEncrypt07();
             } catch (Throwable t) {
                 throwable = t;
             }
         }
-
         try {
             if (writeWorkbookHolder.getTempTemplateInputStream() != null) {
                 writeWorkbookHolder.getTempTemplateInputStream().close();
@@ -304,16 +372,19 @@ public class WriteContextImpl implements WriteContext {
         } catch (Throwable t) {
             throwable = t;
         }
-
         clearEncrypt03();
-
+        removeThreadLocalCache();
         if (throwable != null) {
-            throw new ExcelGenerateException("Can not close IO", throwable);
+            throw new ExcelGenerateException("Can not close IO.", throwable);
         }
-
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("Finished write.");
         }
+    }
+
+    private void removeThreadLocalCache() {
+        NumberDataFormatterUtils.removeThreadLocalCache();
+        DateUtils.removeThreadLocalCache();
     }
 
     @Override

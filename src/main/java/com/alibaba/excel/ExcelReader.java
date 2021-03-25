@@ -14,7 +14,6 @@ import com.alibaba.excel.analysis.ExcelReadExecutor;
 import com.alibaba.excel.cache.MapCache;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.event.AnalysisEventListener;
-import com.alibaba.excel.exception.ExcelAnalysisException;
 import com.alibaba.excel.metadata.Sheet;
 import com.alibaba.excel.parameter.AnalysisParam;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -34,8 +33,6 @@ public class ExcelReader {
      * Analyser
      */
     private ExcelAnalyser excelAnalyser;
-
-    private boolean finished = false;
 
     /**
      * Create new reader
@@ -139,6 +136,8 @@ public class ExcelReader {
         readWorkbook.setReadCache(new MapCache());
         readWorkbook.setConvertAllFiled(Boolean.FALSE);
         readWorkbook.setDefaultReturnMap(Boolean.FALSE);
+        // The previous logic was that Article 0 started reading
+        readWorkbook.setHeadRowNumber(0);
         excelAnalyser = new ExcelAnalyserImpl(readWorkbook);
     }
 
@@ -160,7 +159,6 @@ public class ExcelReader {
      * Parse all sheet content by default
      */
     public void readAll() {
-        checkFinished();
         excelAnalyser.analysis(null, Boolean.TRUE);
     }
 
@@ -181,7 +179,6 @@ public class ExcelReader {
      * @return
      */
     public ExcelReader read(List<ReadSheet> readSheetList) {
-        checkFinished();
         excelAnalyser.analysis(readSheetList, Boolean.FALSE);
         return this;
     }
@@ -231,7 +228,6 @@ public class ExcelReader {
      * @return
      */
     public AnalysisContext analysisContext() {
-        checkFinished();
         return excelAnalyser.analysisContext();
     }
 
@@ -241,7 +237,6 @@ public class ExcelReader {
      * @return
      */
     public ExcelReadExecutor excelExecutor() {
-        checkFinished();
         return excelAnalyser.excelExecutor();
     }
 
@@ -281,11 +276,9 @@ public class ExcelReader {
      * Complete the entire read file.Release the cache and close stream.
      */
     public void finish() {
-        if (finished) {
-            return;
+        if (excelAnalyser != null) {
+            excelAnalyser.finish();
         }
-        finished = true;
-        excelAnalyser.finish();
     }
 
     /**
@@ -294,19 +287,11 @@ public class ExcelReader {
      */
     @Override
     protected void finalize() {
-        if (finished) {
-            return;
-        }
         try {
-            excelAnalyser.finish();
+            finish();
         } catch (Throwable e) {
             LOGGER.warn("Destroy object failed", e);
         }
     }
 
-    private void checkFinished() {
-        if (finished) {
-            throw new ExcelAnalysisException("Can not use a finished reader.");
-        }
-    }
 }

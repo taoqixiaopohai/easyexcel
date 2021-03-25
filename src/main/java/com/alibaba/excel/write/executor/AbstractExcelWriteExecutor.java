@@ -13,7 +13,9 @@ import com.alibaba.excel.converters.ConverterKeyBuild;
 import com.alibaba.excel.enums.CellDataTypeEnum;
 import com.alibaba.excel.exception.ExcelDataConvertException;
 import com.alibaba.excel.metadata.CellData;
+import com.alibaba.excel.metadata.Head;
 import com.alibaba.excel.metadata.property.ExcelContentProperty;
+import com.alibaba.excel.util.WriteHandlerUtils;
 import com.alibaba.excel.write.metadata.holder.WriteHolder;
 
 /**
@@ -29,7 +31,7 @@ public abstract class AbstractExcelWriteExecutor implements ExcelWriteExecutor {
     }
 
     protected CellData converterAndSet(WriteHolder currentWriteHolder, Class clazz, Cell cell, Object value,
-        ExcelContentProperty excelContentProperty) {
+        ExcelContentProperty excelContentProperty, Head head, Integer relativeRowIndex) {
         if (value == null) {
             return new CellData(CellDataTypeEnum.EMPTY);
         }
@@ -43,6 +45,7 @@ public abstract class AbstractExcelWriteExecutor implements ExcelWriteExecutor {
         if (cellData.getType() == null) {
             cellData.setType(CellDataTypeEnum.EMPTY);
         }
+        WriteHandlerUtils.afterCellDataConverted(writeContext, cellData, cell, head, relativeRowIndex, Boolean.FALSE);
         switch (cellData.getType()) {
             case STRING:
                 cell.setCellValue(cellData.getStringValue());
@@ -59,8 +62,9 @@ public abstract class AbstractExcelWriteExecutor implements ExcelWriteExecutor {
             case EMPTY:
                 return cellData;
             default:
-                throw new ExcelDataConvertException("Not supported data:" + value + " return type:" + cell.getCellType()
-                    + "at row:" + cell.getRow().getRowNum());
+                throw new ExcelDataConvertException(cell.getRow().getRowNum(), cell.getColumnIndex(), cellData,
+                    excelContentProperty, "Not supported data:" + value + " return type:" + cell.getCellType()
+                        + "at row:" + cell.getRow().getRowNum());
         }
     }
 
@@ -102,7 +106,8 @@ public abstract class AbstractExcelWriteExecutor implements ExcelWriteExecutor {
             converter = currentWriteHolder.converterMap().get(ConverterKeyBuild.buildKey(clazz));
         }
         if (converter == null) {
-            throw new ExcelDataConvertException(
+            throw new ExcelDataConvertException(cell.getRow().getRowNum(), cell.getColumnIndex(),
+                new CellData(CellDataTypeEnum.EMPTY), excelContentProperty,
                 "Can not find 'Converter' support class " + clazz.getSimpleName() + ".");
         }
         CellData cellData;
@@ -110,11 +115,13 @@ public abstract class AbstractExcelWriteExecutor implements ExcelWriteExecutor {
             cellData =
                 converter.convertToExcelData(value, excelContentProperty, currentWriteHolder.globalConfiguration());
         } catch (Exception e) {
-            throw new ExcelDataConvertException("Convert data:" + value + " error,at row:" + cell.getRow().getRowNum(),
-                e);
+            throw new ExcelDataConvertException(cell.getRow().getRowNum(), cell.getColumnIndex(),
+                new CellData(CellDataTypeEnum.EMPTY), excelContentProperty,
+                "Convert data:" + value + " error,at row:" + cell.getRow().getRowNum(), e);
         }
         if (cellData == null || cellData.getType() == null) {
-            throw new ExcelDataConvertException(
+            throw new ExcelDataConvertException(cell.getRow().getRowNum(), cell.getColumnIndex(),
+                new CellData(CellDataTypeEnum.EMPTY), excelContentProperty,
                 "Convert data:" + value + " return null,at row:" + cell.getRow().getRowNum());
         }
         return cellData;

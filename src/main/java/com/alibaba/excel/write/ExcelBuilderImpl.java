@@ -25,16 +25,19 @@ public class ExcelBuilderImpl implements ExcelBuilder {
     private ExcelWriteFillExecutor excelWriteFillExecutor;
     private ExcelWriteAddExecutor excelWriteAddExecutor;
 
+    static {
+        // Create temporary cache directory at initialization time to avoid POI concurrent write bugs
+        FileUtils.createPoiFilesDirectory();
+    }
+
     public ExcelBuilderImpl(WriteWorkbook writeWorkbook) {
         try {
-            // Create temporary cache directory at initialization time to avoid POI concurrent write bugs
-            FileUtils.createPoiFilesDirectory();
             context = new WriteContextImpl(writeWorkbook);
         } catch (RuntimeException e) {
-            finish();
+            finishOnException();
             throw e;
         } catch (Throwable e) {
-            finish();
+            finishOnException();
             throw new ExcelGenerateException(e);
         }
     }
@@ -47,9 +50,6 @@ public class ExcelBuilderImpl implements ExcelBuilder {
     @Override
     public void addContent(List data, WriteSheet writeSheet, WriteTable writeTable) {
         try {
-            if (data == null) {
-                return;
-            }
             context.currentSheet(writeSheet, WriteTypeEnum.ADD);
             context.currentTable(writeTable);
             if (excelWriteAddExecutor == null) {
@@ -57,10 +57,10 @@ public class ExcelBuilderImpl implements ExcelBuilder {
             }
             excelWriteAddExecutor.add(data);
         } catch (RuntimeException e) {
-            finish();
+            finishOnException();
             throw e;
         } catch (Throwable e) {
-            finish();
+            finishOnException();
             throw new ExcelGenerateException(e);
         }
     }
@@ -68,9 +68,6 @@ public class ExcelBuilderImpl implements ExcelBuilder {
     @Override
     public void fill(Object data, FillConfig fillConfig, WriteSheet writeSheet) {
         try {
-            if (data == null) {
-                return;
-            }
             if (context.writeWorkbookHolder().getTempTemplateInputStream() == null) {
                 throw new ExcelGenerateException("Calling the 'fill' method must use a template.");
             }
@@ -80,39 +77,22 @@ public class ExcelBuilderImpl implements ExcelBuilder {
             }
             excelWriteFillExecutor.fill(data, fillConfig);
         } catch (RuntimeException e) {
-            finish();
+            finishOnException();
             throw e;
         } catch (Throwable e) {
-            finish();
+            finishOnException();
             throw new ExcelGenerateException(e);
         }
     }
 
+    private void finishOnException() {
+        finish(true);
+    }
+
     @Override
-    public void finish() {
+    public void finish(boolean onException) {
         if (context != null) {
-            context.finish();
-        }
-    }
-
-    @Override
-    public void addContent(List data, WriteSheet writeSheet, WriteTable writeTable, String password) {
-        try {
-            if (data == null) {
-                return;
-            }
-            context.currentSheet(writeSheet, WriteTypeEnum.ADD);
-            context.currentTable(writeTable);
-            if (excelWriteAddExecutor == null) {
-                excelWriteAddExecutor = new ExcelWriteAddExecutor(context);
-            }
-            excelWriteAddExecutor.add(data);
-        } catch (RuntimeException e) {
-            finish();
-            throw e;
-        } catch (Throwable e) {
-            finish();
-            throw new ExcelGenerateException(e);
+            context.finish(onException);
         }
     }
 

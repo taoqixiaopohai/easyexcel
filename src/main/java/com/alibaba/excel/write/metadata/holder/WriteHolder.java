@@ -29,6 +29,13 @@ public interface WriteHolder extends ConfigurationHolder {
     Map<Class<? extends WriteHandler>, List<WriteHandler>> writeHandlerMap();
 
     /**
+     * create your own write handler.
+     *
+     * @return
+     */
+    Map<Class<? extends WriteHandler>, List<WriteHandler>> ownWriteHandlerMap();
+
+    /**
      * Is to determine if a field needs to be ignored
      *
      * @param fieldName
@@ -43,6 +50,13 @@ public interface WriteHolder extends ConfigurationHolder {
      * @return
      */
     boolean needHead();
+
+    /**
+     * Whether need automatic merge headers.
+     *
+     * @return
+     */
+    boolean automaticMergeHead();
 
     /**
      * Writes the head relative to the existing contents of the sheet. Indexes are zero-based.

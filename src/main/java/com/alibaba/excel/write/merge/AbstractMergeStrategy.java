@@ -29,6 +29,13 @@ public abstract class AbstractMergeStrategy implements CellWriteHandler {
         Head head, Integer relativeRowIndex, Boolean isHead) {}
 
     @Override
+    public void afterCellDataConverted(WriteSheetHolder writeSheetHolder,
+        WriteTableHolder writeTableHolder, CellData cellData, Cell cell, Head head, Integer relativeRowIndex,
+        Boolean isHead) {
+
+    }
+
+    @Override
     public void afterCellDispose(WriteSheetHolder writeSheetHolder, WriteTableHolder writeTableHolder,
         List<CellData> cellDataList, Cell cell, Head head, Integer relativeRowIndex, Boolean isHead) {
         if (isHead) {
@@ -45,5 +52,5 @@ public abstract class AbstractMergeStrategy implements CellWriteHandler {
      * @param head
      * @param relativeRowIndex
      */
-    protected abstract void merge(Sheet sheet, Cell cell, Head head, int relativeRowIndex);
+    protected abstract void merge(Sheet sheet, Cell cell, Head head, Integer relativeRowIndex);
 }

@@ -92,7 +92,11 @@ public class WriteWorkbookHolder extends AbstractWriteHolder {
     /**
      * prevent duplicate creation of sheet objects
      */
-    private Map<Integer, WriteSheetHolder> hasBeenInitializedSheet;
+    private Map<Integer, WriteSheetHolder> hasBeenInitializedSheetIndexMap;
+    /**
+     * prevent duplicate creation of sheet objects
+     */
+    private Map<String, WriteSheetHolder> hasBeenInitializedSheetNameMap;
     /**
      * Whether the encryption
      */
@@ -103,6 +107,11 @@ public class WriteWorkbookHolder extends AbstractWriteHolder {
      * Comment and RichTextString are only supported in memory mode.
      */
     private Boolean inMemory;
+    /**
+     * Excel is also written in the event of an exception being thrown.The default false.
+     */
+    private Boolean writeExcelOnException;
+
 
     public WriteWorkbookHolder(WriteWorkbook writeWorkbook) {
         super(writeWorkbook, null, writeWorkbook.getConvertAllFiled());
@@ -128,7 +137,10 @@ public class WriteWorkbookHolder extends AbstractWriteHolder {
             throw new ExcelGenerateException("Copy template failure.", e);
         }
         if (writeWorkbook.getExcelType() == null) {
-            if (file != null && file.getName().endsWith(ExcelTypeEnum.XLS.getValue())) {
+            boolean isXls = (file != null && file.getName().endsWith(ExcelTypeEnum.XLS.getValue()))
+                || (writeWorkbook.getTemplateFile() != null
+                    && writeWorkbook.getTemplateFile().getName().endsWith(ExcelTypeEnum.XLS.getValue()));
+            if (isXls) {
                 this.excelType = ExcelTypeEnum.XLS;
             } else {
                 this.excelType = ExcelTypeEnum.XLSX;
@@ -141,12 +153,18 @@ public class WriteWorkbookHolder extends AbstractWriteHolder {
         } else {
             this.mandatoryUseInputStream = writeWorkbook.getMandatoryUseInputStream();
         }
-        this.hasBeenInitializedSheet = new HashMap<Integer, WriteSheetHolder>();
+        this.hasBeenInitializedSheetIndexMap = new HashMap<Integer, WriteSheetHolder>();
+        this.hasBeenInitializedSheetNameMap = new HashMap<String, WriteSheetHolder>();
         this.password = writeWorkbook.getPassword();
         if (writeWorkbook.getInMemory() == null) {
             this.inMemory = Boolean.FALSE;
         } else {
             this.inMemory = writeWorkbook.getInMemory();
+        }
+        if (writeWorkbook.getWriteExcelOnException() == null) {
+            this.writeExcelOnException = Boolean.FALSE;
+        } else {
+            this.writeExcelOnException = writeWorkbook.getWriteExcelOnException();
         }
     }
 
@@ -185,12 +203,20 @@ public class WriteWorkbookHolder extends AbstractWriteHolder {
         this.cachedWorkbook = cachedWorkbook;
     }
 
-    public Map<Integer, WriteSheetHolder> getHasBeenInitializedSheet() {
-        return hasBeenInitializedSheet;
+    public Map<Integer, WriteSheetHolder> getHasBeenInitializedSheetIndexMap() {
+        return hasBeenInitializedSheetIndexMap;
     }
 
-    public void setHasBeenInitializedSheet(Map<Integer, WriteSheetHolder> hasBeenInitializedSheet) {
-        this.hasBeenInitializedSheet = hasBeenInitializedSheet;
+    public void setHasBeenInitializedSheetIndexMap(Map<Integer, WriteSheetHolder> hasBeenInitializedSheetIndexMap) {
+        this.hasBeenInitializedSheetIndexMap = hasBeenInitializedSheetIndexMap;
+    }
+
+    public Map<String, WriteSheetHolder> getHasBeenInitializedSheetNameMap() {
+        return hasBeenInitializedSheetNameMap;
+    }
+
+    public void setHasBeenInitializedSheetNameMap(Map<String, WriteSheetHolder> hasBeenInitializedSheetNameMap) {
+        this.hasBeenInitializedSheetNameMap = hasBeenInitializedSheetNameMap;
     }
 
     public WriteWorkbook getWriteWorkbook() {
@@ -279,6 +305,14 @@ public class WriteWorkbookHolder extends AbstractWriteHolder {
 
     public void setInMemory(Boolean inMemory) {
         this.inMemory = inMemory;
+    }
+
+    public Boolean getWriteExcelOnException() {
+        return writeExcelOnException;
+    }
+
+    public void setWriteExcelOnException(Boolean writeExcelOnException) {
+        this.writeExcelOnException = writeExcelOnException;
     }
 
     @Override

@@ -12,7 +12,7 @@ import com.alibaba.excel.util.StringUtils;
  *
  * @author Jiaju Zhuang
  */
-public class CellData<T> {
+public class CellData<T> extends AbstractCell {
     private CellDataTypeEnum type;
     /**
      * {@link CellDataTypeEnum#NUMBER}
@@ -226,21 +226,60 @@ public class CellData<T> {
         }
     }
 
+    public static CellData newEmptyInstance() {
+        return newEmptyInstance(null, null);
+    }
+
+    public static CellData newEmptyInstance(Integer rowIndex, Integer columnIndex) {
+        CellData cellData = new CellData(CellDataTypeEnum.EMPTY);
+        cellData.setRowIndex(rowIndex);
+        cellData.setColumnIndex(columnIndex);
+        return cellData;
+    }
+
+    public static CellData newInstance(Boolean booleanValue) {
+        return newInstance(booleanValue, null, null);
+    }
+
+    public static CellData newInstance(Boolean booleanValue, Integer rowIndex, Integer columnIndex) {
+        CellData cellData = new CellData(booleanValue);
+        cellData.setRowIndex(rowIndex);
+        cellData.setColumnIndex(columnIndex);
+        return cellData;
+    }
+
+    public static CellData newInstance(String stringValue, Integer rowIndex, Integer columnIndex) {
+        CellData cellData = new CellData(stringValue);
+        cellData.setRowIndex(rowIndex);
+        cellData.setColumnIndex(columnIndex);
+        return cellData;
+    }
+
+    public static CellData newInstance(BigDecimal numberValue, Integer rowIndex, Integer columnIndex) {
+        CellData cellData = new CellData(numberValue);
+        cellData.setRowIndex(rowIndex);
+        cellData.setColumnIndex(columnIndex);
+        return cellData;
+    }
+
     @Override
     public String toString() {
         if (type == null) {
-            return "empty";
+            return StringUtils.EMPTY;
         }
         switch (type) {
             case NUMBER:
                 return numberValue.toString();
             case BOOLEAN:
                 return booleanValue.toString();
+            case DIRECT_STRING:
             case STRING:
             case ERROR:
                 return stringValue;
+            case IMAGE:
+                return "image[" + imageValue.length + "]";
             default:
-                return "empty";
+                return StringUtils.EMPTY;
         }
     }
 

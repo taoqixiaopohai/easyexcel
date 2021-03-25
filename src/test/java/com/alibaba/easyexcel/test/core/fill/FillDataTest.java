@@ -6,35 +6,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.poi.ss.usermodel.BorderStyle;
-import org.apache.poi.ss.usermodel.FillPatternType;
-import org.apache.poi.ss.usermodel.Font;
-import org.apache.poi.ss.usermodel.HorizontalAlignment;
-import org.apache.poi.ss.usermodel.IndexedColors;
-import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-import com.alibaba.easyexcel.test.core.style.StyleData;
-import com.alibaba.easyexcel.test.core.style.StyleDataListener;
 import com.alibaba.easyexcel.test.util.TestFileUtil;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.ExcelWriter;
 import com.alibaba.excel.enums.WriteDirectionEnum;
-import com.alibaba.excel.metadata.Head;
 import com.alibaba.excel.write.merge.LoopMergeStrategy;
-import com.alibaba.excel.write.merge.OnceAbsoluteMergeStrategy;
 import com.alibaba.excel.write.metadata.WriteSheet;
 import com.alibaba.excel.write.metadata.fill.FillConfig;
-import com.alibaba.excel.write.metadata.style.WriteCellStyle;
-import com.alibaba.excel.write.metadata.style.WriteFont;
-import com.alibaba.excel.write.style.AbstractVerticalCellStyleStrategy;
-import com.alibaba.excel.write.style.HorizontalCellStyleStrategy;
-import com.alibaba.excel.write.style.column.SimpleColumnWidthStyleStrategy;
-import com.alibaba.excel.write.style.row.SimpleRowHeightStyleStrategy;
+import com.alibaba.excel.write.metadata.fill.FillWrapper;
 
 /**
  *
@@ -55,6 +40,14 @@ public class FillDataTest {
     private static File horizontalFillTemplate07;
     private static File fileHorizontal03;
     private static File horizontalFillTemplate03;
+    private static File byName07;
+    private static File byName03;
+    private static File byNameTemplate07;
+    private static File byNameTemplate03;
+    private static File fileComposite07;
+    private static File compositeFillTemplate07;
+    private static File fileComposite03;
+    private static File compositeFillTemplate03;
 
     @BeforeClass
     public static void init() {
@@ -70,6 +63,14 @@ public class FillDataTest {
         horizontalFillTemplate07 = TestFileUtil.readFile("fill" + File.separator + "horizontal.xlsx");
         fileHorizontal03 = TestFileUtil.createNewFile("fillHorizontal03.xls");
         horizontalFillTemplate03 = TestFileUtil.readFile("fill" + File.separator + "horizontal.xls");
+        byName07 = TestFileUtil.createNewFile("byName07.xlsx");
+        byNameTemplate07 = TestFileUtil.readFile("fill" + File.separator + "byName.xlsx");
+        byName03 = TestFileUtil.createNewFile("byName03.xls");
+        byNameTemplate03 = TestFileUtil.readFile("fill" + File.separator + "byName.xls");
+        fileComposite07 = TestFileUtil.createNewFile("fileComposite07.xlsx");
+        compositeFillTemplate07 = TestFileUtil.readFile("fill" + File.separator + "composite.xlsx");
+        fileComposite03 = TestFileUtil.createNewFile("fileComposite03.xls");
+        compositeFillTemplate03 = TestFileUtil.readFile("fill" + File.separator + "composite.xls");
     }
 
     @Test
@@ -102,6 +103,58 @@ public class FillDataTest {
         horizontalFill(fileHorizontal03, horizontalFillTemplate03);
     }
 
+    @Test
+    public void t07ByNameFill07() {
+        byNameFill(byName07, byNameTemplate07);
+    }
+
+    @Test
+    public void t08ByNameFill03() {
+        byNameFill(byName03, byNameTemplate03);
+    }
+
+    @Test
+    public void t09CompositeFill07() {
+        compositeFill(fileComposite07, compositeFillTemplate07);
+    }
+
+    @Test
+    public void t10CompositeFill03() {
+        compositeFill(fileComposite03, compositeFillTemplate03);
+    }
+
+    private void byNameFill(File file, File template) {
+        FillData fillData = new FillData();
+        fillData.setName("张三");
+        fillData.setNumber(5.2);
+        EasyExcel.write(file, FillData.class).withTemplate(template).sheet("Sheet2").doFill(fillData);
+    }
+
+    private void compositeFill(File file, File template) {
+        ExcelWriter excelWriter = EasyExcel.write(file).withTemplate(template).build();
+        WriteSheet writeSheet = EasyExcel.writerSheet().build();
+
+        FillConfig fillConfig = FillConfig.builder().direction(WriteDirectionEnum.HORIZONTAL).build();
+        excelWriter.fill(new FillWrapper("data1", data()), fillConfig, writeSheet);
+        excelWriter.fill(new FillWrapper("data1", data()), fillConfig, writeSheet);
+        excelWriter.fill(new FillWrapper("data2", data()), writeSheet);
+        excelWriter.fill(new FillWrapper("data2", data()), writeSheet);
+        excelWriter.fill(new FillWrapper("data3", data()), writeSheet);
+        excelWriter.fill(new FillWrapper("data3", data()), writeSheet);
+        Map<String, Object> map = new HashMap<String, Object>();
+        map.put("date", "2019年10月9日13:28:28");
+        excelWriter.fill(map, writeSheet);
+        excelWriter.finish();
+
+        List<Object> list = EasyExcel.read(file).ignoreEmptyRow(false).sheet().headRowNumber(0).doReadSync();
+        Map<String, String> map0 = (Map<String, String>) list.get(0);
+        Assert.assertEquals("张三", map0.get(21));
+        Map<String, String> map27 = (Map<String, String>) list.get(27);
+        Assert.assertEquals("张三", map27.get(0));
+        Map<String, String> map29 = (Map<String, String>) list.get(29);
+        Assert.assertEquals("张三", map29.get(3));
+    }
+
     private void horizontalFill(File file, File template) {
         ExcelWriter excelWriter = EasyExcel.write(file).withTemplate(template).build();
         WriteSheet writeSheet = EasyExcel.writerSheet().build();
@@ -115,13 +168,13 @@ public class FillDataTest {
 
         List<Object> list = EasyExcel.read(file).sheet().headRowNumber(0).doReadSync();
         Assert.assertEquals(list.size(), 5L);
-        Map<String, String> map0 = (Map<String, String>)list.get(0);
+        Map<String, String> map0 = (Map<String, String>) list.get(0);
         Assert.assertEquals("张三", map0.get(2));
     }
 
     private void complexFill(File file, File template) {
         ExcelWriter excelWriter = EasyExcel.write(file).withTemplate(template).build();
-        WriteSheet writeSheet = EasyExcel.writerSheet().build();
+        WriteSheet writeSheet = EasyExcel.writerSheet().registerWriteHandler(new LoopMergeStrategy(2, 0)).build();
         FillConfig fillConfig = FillConfig.builder().forceNewRow(Boolean.TRUE).build();
         excelWriter.fill(data(), fillConfig, writeSheet);
         excelWriter.fill(data(), fillConfig, writeSheet);
@@ -132,7 +185,7 @@ public class FillDataTest {
         excelWriter.finish();
         List<Object> list = EasyExcel.read(file).sheet().headRowNumber(3).doReadSync();
         Assert.assertEquals(list.size(), 21L);
-        Map<String, String> map19 = (Map<String, String>)list.get(19);
+        Map<String, String> map19 = (Map<String, String>) list.get(19);
         Assert.assertEquals("张三", map19.get(0));
     }
 
@@ -150,6 +203,9 @@ public class FillDataTest {
             list.add(fillData);
             fillData.setName("张三");
             fillData.setNumber(5.2);
+            if (i == 5) {
+                fillData.setName(null);
+            }
         }
         return list;
     }
